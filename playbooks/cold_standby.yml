@@ -1,0 +1,10 @@
+---
+# SPDX-License-Identifier: MIT
+- name: Place Neural Memory Host into Cold Standby (Post-Migration)
+  hosts: neural_memory_servers
+  become: true
+  tasks:
+    - name: Run Cold Standby transition tasks
+      ansible.builtin.include_role:
+        name: neural_memory
+        tasks_from: cold_standby.yml

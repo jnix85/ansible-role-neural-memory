@@ -1,0 +1,34 @@
+#!/bin/bash
+set -e
+
+echo "[postgres-init] Initializing NeuralMemory PostgreSQL database and pgvector extension..."
+
+# Create custom user if not default postgres
+if [ "{{ neural_memory_postgres_user }}" != "$POSTGRES_USER" ]; then
+    echo "[postgres-init] Creating user {{ neural_memory_postgres_user }}..."
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+        DO \$\$
+        BEGIN
+            IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '{{ neural_memory_postgres_user }}') THEN
+                CREATE ROLE {{ neural_memory_postgres_user }} WITH LOGIN PASSWORD '{{ neural_memory_effective_postgres_password }}';
+            END IF;
+        END
+        \$\$;
+EOSQL
+fi
+
+# Create target database if it doesn't exist
+if ! psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" -lqt | cut -d \| -f 1 | grep -qw "{{ neural_memory_postgres_database }}"; then
+    echo "[postgres-init] Creating database {{ neural_memory_postgres_database }}..."
+    createdb -U "$POSTGRES_USER" -O "{{ neural_memory_postgres_user }}" "{{ neural_memory_postgres_database }}"
+fi
+
+# Grant database privileges
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "{{ neural_memory_postgres_database }}" <<-EOSQL
+    GRANT ALL PRIVILEGES ON DATABASE {{ neural_memory_postgres_database }} TO {{ neural_memory_postgres_user }};
+    CREATE EXTENSION IF NOT EXISTS vector;
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    GRANT ALL ON SCHEMA public TO {{ neural_memory_postgres_user }};
+EOSQL
+
+echo "[postgres-init] Database and pgvector extension successfully configured."

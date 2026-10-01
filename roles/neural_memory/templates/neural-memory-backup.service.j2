@@ -1,0 +1,9 @@
+[Unit]
+Description=Neural Memory PostgreSQL Automated Database Backup
+After=neural-memory.service docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/neural-memory-backup.sh
+StandardOutput=journal
+StandardError=journal

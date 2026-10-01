@@ -1,0 +1,27 @@
+[Unit]
+Description=Neural Memory Streamable HTTP MCP Server
+{% if not neural_memory_postgres_external %}
+After=neural-memory-postgres.service
+Wants=neural-memory-postgres.service
+{% else %}
+After=network-online.target
+Wants=network-online.target
+{% endif %}
+
+[Container]
+ContainerName=neural-memory-mcp
+Image={{ neural_memory_image }}
+Exec=python -m neural_memory.mcp --http {{ neural_memory_mcp_port }} --host 0.0.0.0
+Network=neural-memory.network
+EnvironmentFile={{ neural_memory_config_dir }}/neural-memory.env
+Volume={{ neural_memory_data_dir }}/data:/data:Z
+{% if not neural_memory_enable_ingress %}
+PublishPort={{ neural_memory_mcp_port }}:{{ neural_memory_mcp_port }}
+{% endif %}
+
+[Service]
+Restart=always
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target

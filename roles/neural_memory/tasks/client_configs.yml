@@ -1,0 +1,25 @@
+---
+# SPDX-License-Identifier: MIT
+- name: Ensure client config directory exists
+  ansible.builtin.file:
+    path: "{{ neural_memory_client_config_dir }}"
+    state: directory
+    owner: root
+    group: "{{ neural_memory_group }}"
+    mode: "0750"
+
+- name: Render client configuration snippet
+  ansible.builtin.template:
+    src: mcp-client-config.json.j2
+    dest: "{{ neural_memory_client_config_dir }}/mcp_config.json"
+    owner: root
+    group: "{{ neural_memory_group }}"
+    mode: "0640"
+
+- name: Display connection instructions
+  ansible.builtin.debug:
+    msg:
+      - "Neural Memory deployed successfully!"
+      - "Web Dashboard: http://{{ neural_memory_public_host }}:{{ neural_memory_web_port }}/ui"
+      - "Streamable HTTP MCP Endpoint: http://{{ neural_memory_public_host }}:{{ neural_memory_mcp_port }}/mcp"
+      - "Client config generated at: {{ neural_memory_client_config_dir }}/mcp_config.json"

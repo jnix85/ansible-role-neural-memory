@@ -1,0 +1,20 @@
+[Unit]
+Description=Neural Memory Stack (Docker Compose)
+Documentation=https://github.com/jnix85/neural-memory-pro
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory={{ neural_memory_install_dir }}
+EnvironmentFile={{ neural_memory_config_dir }}/neural-memory.env
+ExecStart={{ neural_memory_docker_compose_bin }} compose --env-file {{ neural_memory_config_dir }}/neural-memory.env -f {{ neural_memory_install_dir }}/docker-compose.yml up -d --remove-orphans
+ExecStop={{ neural_memory_docker_compose_bin }} compose -f {{ neural_memory_install_dir }}/docker-compose.yml down
+ExecReload={{ neural_memory_docker_compose_bin }} compose --env-file {{ neural_memory_config_dir }}/neural-memory.env -f {{ neural_memory_install_dir }}/docker-compose.yml restart
+TimeoutStartSec=600
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target

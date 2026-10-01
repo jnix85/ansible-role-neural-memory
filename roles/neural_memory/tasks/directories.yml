@@ -1,0 +1,106 @@
+---
+# SPDX-License-Identifier: MIT
+- name: Ensure neural-memory system group exists
+  ansible.builtin.group:
+    name: "{{ neural_memory_group }}"
+    gid: "{{ neural_memory_group_gid }}"
+    system: true
+    state: present
+  when: neural_memory_create_user | bool
+
+- name: Ensure neural-memory user exists with valid home and shell
+  ansible.builtin.user:
+    name: "{{ neural_memory_user }}"
+    uid: "{{ neural_memory_user_uid }}"
+    group: "{{ neural_memory_group }}"
+    groups: "{{ ['docker'] if (neural_memory_container_engine == 'docker') else [] }}"
+    append: true
+    system: true
+    shell: /bin/bash
+    home: "{{ neural_memory_user_home }}"
+    create_home: true
+    state: present
+  when: neural_memory_create_user | bool
+
+- name: Configure subuid mapping for rootless Podman user
+  ansible.builtin.lineinfile:
+    path: /etc/subuid
+    regexp: "^{{ neural_memory_user }}:"
+    line: "{{ neural_memory_user }}:{{ neural_memory_subuid_start }}:{{ neural_memory_subuid_count }}"
+    create: true
+    mode: "0644"
+  when:
+    - neural_memory_container_engine == "podman"
+    - neural_memory_create_user | bool
+
+- name: Configure subgid mapping for rootless Podman group
+  ansible.builtin.lineinfile:
+    path: /etc/subgid
+    regexp: "^{{ neural_memory_user }}:"
+    line: "{{ neural_memory_user }}:{{ neural_memory_subuid_start }}:{{ neural_memory_subuid_count }}"
+    create: true
+    mode: "0644"
+  when:
+    - neural_memory_container_engine == "podman"
+    - neural_memory_create_user | bool
+
+- name: Enable systemd lingering for rootless user
+  ansible.builtin.command:
+    cmd: "loginctl enable-linger {{ neural_memory_user }}"
+  changed_when: false
+  when:
+    - neural_memory_container_engine == "podman"
+    - neural_memory_create_user | bool
+
+- name: Create base directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.group | default(neural_memory_group) }}"
+    mode: "{{ item.mode | default('0755') }}"
+  loop:
+    - path: "{{ neural_memory_install_dir }}"
+      owner: root
+      group: "{{ neural_memory_group }}"
+      mode: "0755"
+    - path: "{{ neural_memory_install_dir }}/scripts"
+      owner: root
+      group: "{{ neural_memory_group }}"
+      mode: "0755"
+    - path: "{{ neural_memory_config_dir }}"
+      owner: root
+      group: "{{ neural_memory_group }}"
+      mode: "0750"
+    - path: "{{ neural_memory_config_dir }}/nginx"
+      owner: root
+      group: "{{ neural_memory_group }}"
+      mode: "0755"
+    - path: "{{ neural_memory_ingress_ssl_dir }}"
+      owner: "{{ neural_memory_user }}"
+      group: "{{ neural_memory_group }}"
+      mode: "0700"
+    - path: "{{ neural_memory_data_dir }}"
+      owner: "{{ neural_memory_user }}"
+      group: "{{ neural_memory_group }}"
+      mode: "0750"
+    - path: "{{ neural_memory_data_dir }}/data"
+      owner: "{{ neural_memory_user }}"
+      group: "{{ neural_memory_group }}"
+      mode: "0755"
+    - path: "{{ neural_memory_backup_dir }}"
+      owner: "{{ neural_memory_user }}"
+      group: "{{ neural_memory_group }}"
+      mode: "0750"
+    - path: "{{ neural_memory_log_dir }}"
+      owner: "{{ neural_memory_user }}"
+      group: "{{ neural_memory_group }}"
+      mode: "0755"
+    - path: "{{ neural_memory_user_home }}/.config/containers/systemd"
+      owner: "{{ neural_memory_user }}"
+      group: "{{ neural_memory_group }}"
+      mode: "0755"
+    - path: "{{ neural_memory_user_home }}/.config/systemd/user"
+      owner: "{{ neural_memory_user }}"
+      group: "{{ neural_memory_group }}"
+      mode: "0755"

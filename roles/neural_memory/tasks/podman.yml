@@ -1,0 +1,208 @@
+---
+# SPDX-License-Identifier: MIT
+- name: Clone Neural Memory source repository
+  ansible.builtin.git:
+    repo: "{{ neural_memory_git_repo }}"
+    version: "{{ neural_memory_git_ref }}"
+    dest: "{{ neural_memory_install_dir }}/src"
+    depth: "{{ neural_memory_git_depth }}"
+    force: true
+  when: neural_memory_source_type == 'git'
+  register: neural_memory_podman_git_checkout
+
+- name: Deploy Neural Memory environment file
+  ansible.builtin.template:
+    src: neural-memory.env.j2
+    dest: "{{ neural_memory_config_dir }}/neural-memory.env"
+    owner: "{{ neural_memory_user }}"
+    group: "{{ neural_memory_group }}"
+    mode: "0600"
+
+- name: Build Neural Memory container image (Podman)
+  ansible.builtin.command:
+    cmd: "podman build -t {{ neural_memory_image }} {{ neural_memory_install_dir }}/src"
+  become: true
+  become_user: "{{ neural_memory_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ neural_memory_user_uid }}"
+  when:
+    - not ansible_check_mode
+    - neural_memory_source_type == 'git'
+    - neural_memory_podman_git_checkout.changed | default(false)
+  register: neural_memory_podman_build
+  changed_when: "'STEP' in neural_memory_podman_build.stdout or 'COMMIT' in neural_memory_podman_build.stdout"
+
+- name: Pull pre-built container images (Podman)
+  ansible.builtin.command:
+    cmd: "podman pull {{ item }}"
+  become: true
+  become_user: "{{ neural_memory_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ neural_memory_user_uid }}"
+  loop:
+    - "{{ neural_memory_postgres_image }}"
+    - "{{ neural_memory_ingress_image }}"
+    - "{{ neural_memory_backup_image }}"
+  when:
+    - not ansible_check_mode
+  register: neural_memory_podman_pull
+  changed_when: "'Trying to pull' in neural_memory_podman_pull.stdout"
+
+# -------------------------------------------------------------------------
+# TLS Certificate Management
+# -------------------------------------------------------------------------
+- name: Deploy custom TLS certificate
+  ansible.builtin.copy:
+    content: "{{ neural_memory_tls_cert }}"
+    dest: "{{ neural_memory_ingress_ssl_dir }}/server.crt"
+    owner: "{{ neural_memory_user }}"
+    group: "{{ neural_memory_group }}"
+    mode: "0644"
+  when:
+    - neural_memory_enable_ingress | bool
+    - neural_memory_tls_cert | length > 0
+
+- name: Deploy custom TLS private key
+  ansible.builtin.copy:
+    content: "{{ neural_memory_tls_key }}"
+    dest: "{{ neural_memory_ingress_ssl_dir }}/server.key"
+    owner: "{{ neural_memory_user }}"
+    group: "{{ neural_memory_group }}"
+    mode: "0600"
+  when:
+    - neural_memory_enable_ingress | bool
+    - neural_memory_tls_key | length > 0
+
+- name: Check if TLS certificate exists
+  ansible.builtin.stat:
+    path: "{{ neural_memory_ingress_ssl_dir }}/server.crt"
+  register: neural_memory_ssl_cert_stat
+  when:
+    - neural_memory_enable_ingress | bool
+    - neural_memory_tls_cert | length == 0
+
+- name: Generate self-signed TLS certificate if none provided
+  ansible.builtin.command: >-
+    openssl req -x509 -nodes -days 3650 -newkey rsa:2048
+    -keyout {{ neural_memory_ingress_ssl_dir }}/server.key
+    -out {{ neural_memory_ingress_ssl_dir }}/server.crt
+    -subj "/CN={{ neural_memory_public_host }}/O=NeuralMemory"
+  become: true
+  become_user: "{{ neural_memory_user }}"
+  when:
+    - neural_memory_enable_ingress | bool
+    - neural_memory_tls_cert | length == 0
+    - neural_memory_ingress_tls_self_signed | bool
+    - not neural_memory_ssl_cert_stat.stat.exists
+  changed_when: true
+
+- name: Deploy Nginx reverse proxy configuration
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: "{{ neural_memory_config_dir }}/nginx/nginx.conf"
+    owner: "{{ neural_memory_user }}"
+    group: "{{ neural_memory_group }}"
+    mode: "0644"
+  when: neural_memory_enable_ingress | bool
+
+# -------------------------------------------------------------------------
+# Podman Quadlet Unit Files Deployment
+# -------------------------------------------------------------------------
+- name: Deploy Podman Network Quadlet
+  ansible.builtin.template:
+    src: quadlets/neural-memory.network.j2
+    dest: "{{ neural_memory_quadlet_dir }}/neural-memory.network"
+    owner: "{{ neural_memory_user }}"
+    group: "{{ neural_memory_group }}"
+    mode: "0644"
+  register: neural_memory_quadlet_network
+
+- name: Deploy Podman PostgreSQL Volume Quadlet
+  ansible.builtin.template:
+    src: quadlets/neural-memory-postgres.volume.j2
+    dest: "{{ neural_memory_quadlet_dir }}/neural-memory-postgres.volume"
+    owner: "{{ neural_memory_user }}"
+    group: "{{ neural_memory_group }}"
+    mode: "0644"
+  when: not neural_memory_postgres_external | bool
+  register: neural_memory_quadlet_pgvol
+
+- name: Deploy Podman PostgreSQL Container Quadlet
+  ansible.builtin.template:
+    src: quadlets/neural-memory-postgres.container.j2
+    dest: "{{ neural_memory_quadlet_dir }}/neural-memory-postgres.container"
+    owner: "{{ neural_memory_user }}"
+    group: "{{ neural_memory_group }}"
+    mode: "0644"
+  when: not neural_memory_postgres_external | bool
+  register: neural_memory_quadlet_pg
+
+- name: Deploy Podman Web Container Quadlet
+  ansible.builtin.template:
+    src: quadlets/neural-memory-web.container.j2
+    dest: "{{ neural_memory_quadlet_dir }}/neural-memory-web.container"
+    owner: "{{ neural_memory_user }}"
+    group: "{{ neural_memory_group }}"
+    mode: "0644"
+  when: neural_memory_enable_web | bool
+  register: neural_memory_quadlet_web
+
+- name: Deploy Podman MCP Container Quadlet
+  ansible.builtin.template:
+    src: quadlets/neural-memory-mcp.container.j2
+    dest: "{{ neural_memory_quadlet_dir }}/neural-memory-mcp.container"
+    owner: "{{ neural_memory_user }}"
+    group: "{{ neural_memory_group }}"
+    mode: "0644"
+  when: neural_memory_enable_mcp_http | bool
+  register: neural_memory_quadlet_mcp
+
+- name: Deploy Podman Nginx Ingress Container Quadlet
+  ansible.builtin.template:
+    src: quadlets/neural-memory-nginx.container.j2
+    dest: "{{ neural_memory_quadlet_dir }}/neural-memory-nginx.container"
+    owner: "{{ neural_memory_user }}"
+    group: "{{ neural_memory_group }}"
+    mode: "0644"
+  when: neural_memory_enable_ingress | bool
+  register: neural_memory_quadlet_nginx
+
+- name: Deploy Podman Backup Sidecar Container Quadlet
+  ansible.builtin.template:
+    src: quadlets/neural-memory-backup.container.j2
+    dest: "{{ neural_memory_quadlet_dir }}/neural-memory-backup.container"
+    owner: "{{ neural_memory_user }}"
+    group: "{{ neural_memory_group }}"
+    mode: "0644"
+  when:
+    - neural_memory_backup_enabled | bool
+    - not neural_memory_postgres_external | bool
+  register: neural_memory_quadlet_backup
+
+- name: Reload systemd user daemon for Quadlet generation
+  ansible.builtin.command:
+    cmd: systemctl --user daemon-reload
+  become: true
+  become_user: "{{ neural_memory_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ neural_memory_user_uid }}"
+  changed_when: true
+  when: not ansible_check_mode
+
+- name: Ensure Neural Memory user services are started and enabled
+  ansible.builtin.command:
+    cmd: "systemctl --user {{ neural_memory_service_state | default('started') | replace('started', 'start') | replace('stopped', 'stop') }} {{ item }}"
+  become: true
+  become_user: "{{ neural_memory_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ neural_memory_user_uid }}"
+  loop:
+    - "{{ 'neural-memory-postgres.service' if (not neural_memory_postgres_external | bool) else omit }}"
+    - "{{ 'neural-memory-web.service' if (neural_memory_enable_web | bool) else omit }}"
+    - "{{ 'neural-memory-mcp.service' if (neural_memory_enable_mcp_http | bool) else omit }}"
+    - "{{ 'neural-memory-nginx.service' if (neural_memory_enable_ingress | bool) else omit }}"
+    - "{{ 'neural-memory-backup.service' if (neural_memory_backup_enabled | bool and not neural_memory_postgres_external | bool) else omit }}"
+  when:
+    - not ansible_check_mode
+    - item != omit
+  changed_when: false

@@ -1,0 +1,30 @@
+[Unit]
+Description=Neural Memory Database Automated Backup Sidecar
+{% if not neural_memory_postgres_external %}
+After=neural-memory-postgres.service
+Wants=neural-memory-postgres.service
+{% else %}
+After=network-online.target
+Wants=network-online.target
+{% endif %}
+
+[Container]
+ContainerName=neural-memory-backup
+Image={{ neural_memory_backup_image }}
+Network=neural-memory.network
+Environment=POSTGRES_HOST={{ neural_memory_postgres_host }}
+Environment=POSTGRES_PORT={{ neural_memory_postgres_port }}
+Environment=POSTGRES_DB={{ neural_memory_postgres_database }}
+Environment=POSTGRES_USER={{ neural_memory_postgres_user }}
+Environment=POSTGRES_PASSWORD={{ neural_memory_effective_postgres_password }}
+Environment=SCHEDULE={{ neural_memory_backup_cron_schedule }}
+Environment=BACKUP_KEEP_DAYS={{ neural_memory_backup_retention_days }}
+Environment=BACKUP_SUFFIX=.sql.gz
+Volume={{ neural_memory_backup_dir }}:/backups:Z
+
+[Service]
+Restart=always
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target

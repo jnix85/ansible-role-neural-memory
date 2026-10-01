@@ -1,0 +1,30 @@
+---
+# Configuration for neural_memory_servers group
+
+# Service management
+neural_memory_service_name: neural-memory
+neural_memory_service_enabled: true
+neural_memory_service_state: started
+
+# Network binding and ports
+neural_memory_bind_host: "0.0.0.0"
+neural_memory_web_port: 8000
+neural_memory_mcp_port: 8765
+neural_memory_postgres_published_port: 5432
+
+# Storage configuration (PostgreSQL + pgvector)
+neural_memory_storage_backend: "postgres"
+neural_memory_postgres_user: "neuralmemory"
+neural_memory_postgres_database: "neuralmemory"
+neural_memory_postgres_port: 5432
+
+# LLM Gateway (Bifrost or OpenAI compatible)
+neural_memory_llm_gateway_url: "http://bifrost.internal:8080/v1"
+neural_memory_llm_gateway_model: "gpt-4o"
+neural_memory_embedding_provider: "openai"
+neural_memory_embedding_dim: 1536
+
+# Automated backup settings
+neural_memory_backup_enabled: true
+neural_memory_backup_schedule: "*-*-* 02:30:00"
+neural_memory_backup_retention_days: 14

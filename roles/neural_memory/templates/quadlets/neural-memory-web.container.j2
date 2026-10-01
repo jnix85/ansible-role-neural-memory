@@ -1,0 +1,26 @@
+[Unit]
+Description=Neural Memory FastAPI Web Dashboard & REST Service
+{% if not neural_memory_postgres_external %}
+After=neural-memory-postgres.service
+Wants=neural-memory-postgres.service
+{% else %}
+After=network-online.target
+Wants=network-online.target
+{% endif %}
+
+[Container]
+ContainerName=neural-memory-web
+Image={{ neural_memory_image }}
+Network=neural-memory.network
+EnvironmentFile={{ neural_memory_config_dir }}/neural-memory.env
+Volume={{ neural_memory_data_dir }}/data:/data:Z
+{% if not neural_memory_enable_ingress %}
+PublishPort={{ neural_memory_web_port }}:8000
+{% endif %}
+
+[Service]
+Restart=always
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target

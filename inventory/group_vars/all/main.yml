@@ -1,0 +1,3 @@
+---
+# Global defaults across all inventories
+neural_memory_enabled: true

@@ -1,0 +1,164 @@
+---
+# SPDX-License-Identifier: MIT
+# Defaults for neural_memory role
+
+# -------------------------------------------------------------------------
+# Container Engine & Orchestration
+# -------------------------------------------------------------------------
+# Options: "podman" (rootless systemd Quadlets) or "docker" (Docker Compose)
+neural_memory_container_engine: podman
+neural_memory_manage_docker: false
+neural_memory_manage_podman: true
+neural_memory_docker_compose_bin: /usr/bin/docker
+
+# -------------------------------------------------------------------------
+# Service Management
+# -------------------------------------------------------------------------
+neural_memory_service_name: neural-memory
+neural_memory_service_enabled: true
+neural_memory_service_state: started
+
+# Dedicated user & group for host-level and rootless container execution
+neural_memory_user: neuralmemory
+neural_memory_group: neuralmemory
+neural_memory_create_user: true
+neural_memory_user_uid: 10001
+neural_memory_group_gid: 10001
+
+# Subuid / Subgid allocation for rootless container namespaces
+neural_memory_subuid_start: 100000
+neural_memory_subuid_count: 65536
+
+# -------------------------------------------------------------------------
+# Filesystem Paths
+# -------------------------------------------------------------------------
+neural_memory_install_dir: /opt/neural-memory
+neural_memory_config_dir: /etc/neural-memory
+neural_memory_data_dir: /var/lib/neural-memory
+neural_memory_backup_dir: /var/backups/neural-memory
+neural_memory_log_dir: /var/log/neural-memory
+neural_memory_user_home: "{{ neural_memory_data_dir }}"
+neural_memory_quadlet_dir: "{{ neural_memory_user_home }}/.config/containers/systemd"
+
+# -------------------------------------------------------------------------
+# Source & Image Configuration
+# -------------------------------------------------------------------------
+# Options: "git" (clone and build) or "image" (pull pre-built container image)
+neural_memory_source_type: git
+neural_memory_git_repo: "https://github.com/jnix85/neural-memory-pro.git"
+neural_memory_git_ref: "main"
+neural_memory_git_depth: 1
+
+# Container image tags
+neural_memory_image_name: neural-memory
+neural_memory_image_tag: latest
+neural_memory_image: "{{ neural_memory_image_name }}:{{ neural_memory_image_tag }}"
+
+# -------------------------------------------------------------------------
+# Network Binding and Services
+# -------------------------------------------------------------------------
+neural_memory_bind_host: "0.0.0.0"
+neural_memory_web_port: 8000
+neural_memory_mcp_port: 8765
+
+# Toggle components within stack
+neural_memory_enable_web: true
+neural_memory_enable_mcp_http: true
+
+# Access & Rate Limiting
+neural_memory_rate_limit: 120
+neural_memory_rate_limit_window: 60
+neural_memory_trusted_networks:
+  - "127.0.0.1/32"
+  - "10.0.0.0/8"
+  - "172.16.0.0/12"
+  - "192.168.0.0/16"
+
+# -------------------------------------------------------------------------
+# Ingress & TLS Reverse Proxy (Nginx Sidecar)
+# -------------------------------------------------------------------------
+neural_memory_enable_ingress: true
+neural_memory_ingress_image: "nginx:alpine"
+neural_memory_ingress_http_port: 80
+neural_memory_ingress_https_port: 443
+neural_memory_ingress_tls_self_signed: true
+neural_memory_ingress_ssl_dir: "{{ neural_memory_config_dir }}/ssl"
+
+# TLS Certificates (set via vault or leave empty for auto-generated self-signed)
+neural_memory_tls_cert: "{{ vault_neural_memory_tls_cert | default('') }}"
+neural_memory_tls_key: "{{ vault_neural_memory_tls_key | default('') }}"
+
+# -------------------------------------------------------------------------
+# Security & Authentication
+# -------------------------------------------------------------------------
+# Set via vault_neural_memory_api_key or let role auto-generate a secure token
+neural_memory_api_key: "{{ vault_neural_memory_api_key | default('') }}"
+neural_memory_debug: false
+
+# -------------------------------------------------------------------------
+# Storage Backend: PostgreSQL + pgvector
+# -------------------------------------------------------------------------
+neural_memory_storage_backend: postgres
+neural_memory_postgres_external: false
+neural_memory_postgres_image: "pgvector/pgvector:pg16-trixie"
+neural_memory_postgres_container_name: neural-memory-postgres
+neural_memory_postgres_host: postgres
+neural_memory_postgres_port: 5432
+# Publish postgres port to host network if set (e.g. 5432), leave empty to keep internal
+neural_memory_postgres_published_port: ""
+neural_memory_postgres_database: neuralmemory
+neural_memory_postgres_user: neuralmemory
+neural_memory_postgres_password: "{{ vault_neural_memory_postgres_password | default('') }}"
+neural_memory_default_brain: default
+neural_memory_embedding_dim: 1536
+
+# -------------------------------------------------------------------------
+# LLM Gateway (Bifrost / OpenAI-compatible / Providers)
+# -------------------------------------------------------------------------
+# Bifrost or custom OpenAI-compatible gateway URL
+neural_memory_llm_gateway_url: ""
+neural_memory_llm_gateway_api_key: "{{ vault_neural_memory_llm_gateway_api_key | default('') }}"
+neural_memory_llm_gateway_model: "gpt-4o"
+
+# Specific provider keys (optional fallback)
+neural_memory_openai_base_url: "{{ neural_memory_llm_gateway_url }}"
+neural_memory_openai_api_key: "{{ neural_memory_llm_gateway_api_key }}"
+neural_memory_gemini_api_key: "{{ vault_neural_memory_gemini_api_key | default('') }}"
+neural_memory_anthropic_api_key: "{{ vault_neural_memory_anthropic_api_key | default('') }}"
+
+# -------------------------------------------------------------------------
+# Maintenance & Daemon Schedules
+# -------------------------------------------------------------------------
+neural_memory_consolidation_interval_hours: 6
+neural_memory_decay_interval_hours: 24
+
+# -------------------------------------------------------------------------
+# Automated Backups (Sidecar Container)
+# -------------------------------------------------------------------------
+neural_memory_backup_enabled: true
+neural_memory_backup_image: "prodrigestivill/postgres-backup-local:16"
+neural_memory_backup_cron_schedule: "0 2 * * *"
+neural_memory_backup_retention_days: 14
+neural_memory_backup_compression: gzip
+
+# -------------------------------------------------------------------------
+# Client Configuration Generation
+# -------------------------------------------------------------------------
+neural_memory_generate_client_configs: true
+neural_memory_client_config_dir: "{{ neural_memory_config_dir }}/clients"
+neural_memory_public_host: "{{ ansible_host | default(inventory_hostname) }}"
+
+# -------------------------------------------------------------------------
+# Brain Migration & Cold Standby
+# -------------------------------------------------------------------------
+neural_memory_migration_dir: "/tmp/neural_memory_migration"
+neural_memory_standby_enabled: false
+
+# -------------------------------------------------------------------------
+# Kubernetes Target Ingress & Cutover
+# -------------------------------------------------------------------------
+neural_memory_k8s_enabled: false
+neural_memory_k8s_host: "5f432058-d62c-45b4-8705-b5054b9be10c.k8s.civo.com"
+neural_memory_k8s_mcp_url: "https://{{ neural_memory_k8s_host }}/mcp"
+neural_memory_k8s_api_key: "{{ neural_memory_effective_api_key | default('') }}"
+neural_memory_k8s_client_config_dir: "{{ neural_memory_client_config_dir }}/k8s"

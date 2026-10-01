@@ -1,0 +1,24 @@
+---
+# SPDX-License-Identifier: MIT
+- name: Export Verified Neural Memory Brain for Day-0 Kubernetes Migration
+  hosts: neural_memory_servers
+  become: true
+  tasks:
+    - name: Run Brain export and integrity verification tasks
+      ansible.builtin.include_role:
+        name: neural_memory
+        tasks_from: export_brain.yml
+
+    - name: Fetch migration dump file to operator workstation (optional)
+      ansible.builtin.fetch:
+        src: "{{ neural_memory_migration_dump_file }}"
+        dest: "./migration_artifacts/"
+        flat: true
+      when: neural_memory_fetch_artifacts | default(false) | bool
+
+    - name: Fetch migration data tarball to operator workstation (optional)
+      ansible.builtin.fetch:
+        src: "{{ neural_memory_migration_data_file }}"
+        dest: "./migration_artifacts/"
+        flat: true
+      when: neural_memory_fetch_artifacts | default(false) | bool

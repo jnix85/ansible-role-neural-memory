@@ -1,0 +1,20 @@
+[Unit]
+Description=Neural Memory Nginx Ingress & TLS Reverse Proxy
+After=neural-memory-web.service neural-memory-mcp.service
+Wants=neural-memory-web.service neural-memory-mcp.service
+
+[Container]
+ContainerName=neural-memory-nginx
+Image={{ neural_memory_ingress_image }}
+Network=neural-memory.network
+Volume={{ neural_memory_config_dir }}/nginx/nginx.conf:/etc/nginx/nginx.conf:ro,Z
+Volume={{ neural_memory_ingress_ssl_dir }}:/etc/nginx/ssl:ro,Z
+PublishPort={{ neural_memory_ingress_http_port }}:{{ neural_memory_ingress_http_port }}
+PublishPort={{ neural_memory_ingress_https_port }}:{{ neural_memory_ingress_https_port }}
+
+[Service]
+Restart=always
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target

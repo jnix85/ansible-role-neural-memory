@@ -1,0 +1,11 @@
+[Unit]
+Description=Timer for Neural Memory Automated Database Backup
+Requires=neural-memory-backup.service
+
+[Timer]
+OnCalendar={{ neural_memory_backup_schedule }}
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

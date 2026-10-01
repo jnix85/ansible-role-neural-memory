@@ -1,0 +1,10 @@
+---
+# SPDX-License-Identifier: MIT
+- name: Deploy PostgreSQL initialization script
+  ansible.builtin.template:
+    src: postgres-init.sh.j2
+    dest: "{{ neural_memory_install_dir }}/scripts/postgres-init.sh"
+    owner: root
+    group: "{{ neural_memory_group }}"
+    mode: "0755"
+  notify: Restart neural-memory

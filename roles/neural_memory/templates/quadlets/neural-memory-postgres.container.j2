@@ -1,0 +1,28 @@
+[Unit]
+Description=Neural Memory PostgreSQL 16 + pgvector Database
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+ContainerName={{ neural_memory_postgres_container_name }}
+Image={{ neural_memory_postgres_image }}
+Network=neural-memory.network
+Environment=POSTGRES_USER=postgres
+Environment=POSTGRES_PASSWORD={{ neural_memory_effective_postgres_password }}
+Environment=POSTGRES_DB=postgres
+Volume=neural_memory_postgres_data.volume:/var/lib/postgresql/data:Z
+Volume={{ neural_memory_install_dir }}/scripts/postgres-init.sh:/docker-entrypoint-initdb.d/init.sh:ro,Z
+{% if neural_memory_postgres_published_port %}
+PublishPort={{ neural_memory_postgres_published_port }}:5432
+{% endif %}
+HealthCmd=pg_isready -U postgres
+HealthInterval=10s
+HealthTimeout=5s
+HealthRetries=5
+
+[Service]
+Restart=always
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target

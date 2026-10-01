@@ -1,0 +1,39 @@
+---
+# SPDX-License-Identifier: MIT
+- name: Install automated backup script
+  ansible.builtin.template:
+    src: neural-memory-backup.sh.j2
+    dest: /usr/local/sbin/neural-memory-backup.sh
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Install backup systemd service unit
+  ansible.builtin.template:
+    src: neural-memory-backup.service.j2
+    dest: /etc/systemd/system/neural-memory-backup.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Install backup systemd timer unit
+  ansible.builtin.template:
+    src: neural-memory-backup.timer.j2
+    dest: /etc/systemd/system/neural-memory-backup.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart neural-memory-backup-timer
+
+- name: Flush handlers for backup units
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure neural-memory-backup timer is enabled and active
+  ansible.builtin.systemd:
+    name: neural-memory-backup.timer
+    enabled: true
+    state: started
+  when: not ansible_check_mode

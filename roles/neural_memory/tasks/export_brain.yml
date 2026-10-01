@@ -1,0 +1,85 @@
+---
+# SPDX-License-Identifier: MIT
+# Task: Export Neural Memory Brain (PostgreSQL knowledge graph + /data state)
+# Used for Day-0 migration to Kubernetes or disaster recovery snapshots.
+
+- name: Ensure migration export directory exists
+  ansible.builtin.file:
+    path: "{{ neural_memory_migration_dir }}"
+    state: directory
+    owner: root
+    group: "{{ neural_memory_group }}"
+    mode: "0750"
+
+- name: Set export artifact file paths
+  ansible.builtin.set_fact:
+    neural_memory_migration_dump_file: "{{ neural_memory_migration_dir }}/neuralmemory_brain_migration.dump"
+    neural_memory_migration_data_file: "{{ neural_memory_migration_dir }}/neuralmemory_data_migration.tar.gz"
+
+- name: Export PostgreSQL pgvector knowledge graph (Podman Quadlet)
+  ansible.builtin.shell:
+    cmd: >-
+      podman exec neural-memory-postgres
+      pg_dump -U "{{ neural_memory_postgres_user }}" -d "{{ neural_memory_postgres_database }}" -Fc
+      > "{{ neural_memory_migration_dump_file }}"
+  become: true
+  become_user: "{{ neural_memory_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ neural_memory_user_uid }}"
+  when:
+    - neural_memory_container_engine == 'podman'
+    - not neural_memory_postgres_external | bool
+
+- name: Export PostgreSQL pgvector knowledge graph (Docker Compose)
+  ansible.builtin.shell:
+    cmd: >-
+      docker compose -f "{{ neural_memory_install_dir }}/docker-compose.yml"
+      exec -T postgres
+      pg_dump -U "{{ neural_memory_postgres_user }}" -d "{{ neural_memory_postgres_database }}" -Fc
+      > "{{ neural_memory_migration_dump_file }}"
+  when:
+    - neural_memory_container_engine == 'docker'
+    - not neural_memory_postgres_external | bool
+
+- name: Export PostgreSQL pgvector knowledge graph (External Postgres)
+  ansible.builtin.shell:
+    cmd: >-
+      PGPASSWORD="{{ neural_memory_postgres_password }}"
+      pg_dump -h "{{ neural_memory_postgres_host }}" -p "{{ neural_memory_postgres_port }}"
+      -U "{{ neural_memory_postgres_user }}" -d "{{ neural_memory_postgres_database }}" -Fc
+      -f "{{ neural_memory_migration_dump_file }}"
+  when: neural_memory_postgres_external | bool
+  no_log: true
+
+- name: Verify PostgreSQL dump archive integrity
+  ansible.builtin.command:
+    cmd: "pg_restore -l {{ neural_memory_migration_dump_file }}"
+  register: neural_memory_dump_verify
+  failed_when: neural_memory_dump_verify.rc != 0
+  changed_when: false
+
+- name: Archive /data runtime state directory
+  community.general.archive:
+    path: "{{ neural_memory_data_dir }}/*"
+    dest: "{{ neural_memory_migration_data_file }}"
+    format: gz
+    exclude_path:
+      - "{{ neural_memory_data_dir }}/*.sock"
+      - "{{ neural_memory_data_dir }}/tmp"
+
+- name: Collect artifact metadata
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ neural_memory_migration_dump_file }}"
+    - "{{ neural_memory_migration_data_file }}"
+  register: neural_memory_migration_artifacts
+
+- name: Display migration bundle summary
+  ansible.builtin.debug:
+    msg:
+      - "=== Neural Memory Brain Export Complete ==="
+      - "Database Dump (pgvector): {{ neural_memory_migration_dump_file }} ({{ (neural_memory_migration_artifacts.results[0].stat.size / 1024 / 1024) | round(2) }} MB)"
+      - "Data Volume Archive:     {{ neural_memory_migration_data_file }} ({{ (neural_memory_migration_artifacts.results[1].stat.size / 1024 / 1024) | round(2) }} MB)"
+      - "Integrity Status: Verified via pg_restore TOC inspection"
+      - "Ready for transfer to Kubernetes via kubectl cp"

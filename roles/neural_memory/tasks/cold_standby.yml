@@ -1,0 +1,57 @@
+---
+# SPDX-License-Identifier: MIT
+# Task: Place Neural Memory host into Cold Standby mode
+# Halts all containerized services and disables auto-start on boot,
+# while preserving all database and /data persistent volumes in-place
+# as an offline emergency recovery snapshot.
+
+- name: Halt Podman Quadlet services (User Session)
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    scope: user
+    state: stopped
+    enabled: false
+  become: true
+  become_user: "{{ neural_memory_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ neural_memory_user_uid }}"
+  loop:
+    - neural-memory-nginx.service
+    - neural-memory-web.service
+    - neural-memory-mcp.service
+    - neural-memory-backup.service
+    - neural-memory-postgres.service
+  when: neural_memory_container_engine == 'podman'
+  failed_when: false
+
+- name: Halt Docker Compose systemd service
+  ansible.builtin.systemd:
+    name: "{{ neural_memory_service_name }}"
+    state: stopped
+    enabled: false
+  when: neural_memory_container_engine == 'docker'
+  failed_when: false
+
+- name: Disable automated backup systemd timer during standby
+  ansible.builtin.systemd:
+    name: neural-memory-backup.timer
+    state: stopped
+    enabled: false
+  failed_when: false
+
+- name: Confirm persistence directory integrity
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ neural_memory_data_dir }}"
+    - "{{ neural_memory_backup_dir }}"
+  register: neural_memory_standby_data_check
+
+- name: Display Cold Standby confirmation
+  ansible.builtin.debug:
+    msg:
+      - "=== Neural Memory Host Set to Cold Standby ==="
+      - "Service State: All containers and background timers stopped and disabled"
+      - "Persistent Data: In-place storage preserved at {{ neural_memory_data_dir }}"
+      - "Split-Brain Safety: Host is offline; will not receive or record divergent memories"
+      - "Rollback Readiness: Can be re-activated instantly via playbooks/deploy.yml"

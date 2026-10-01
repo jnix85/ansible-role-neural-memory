@@ -1,0 +1,29 @@
+---
+galaxy_info:
+  author: Jason Parks
+  description: Comprehensive Ansible role to deploy Neural Memory MCP & Web server with PostgreSQL pgvector backend via Docker Compose
+  company: ""
+  license: MIT
+  min_ansible_version: "2.14"
+
+  platforms:
+    - name: Debian
+      versions:
+        - bookworm
+        - trixie
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+
+  galaxy_tags:
+    - ai
+    - memory
+    - mcp
+    - llm
+    - postgresql
+    - pgvector
+    - docker
+    - systemd
+
+dependencies: []

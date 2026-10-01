@@ -1,0 +1,48 @@
+{% set mcp_url = ('https://' + neural_memory_public_host + ((':' + neural_memory_ingress_https_port|string) if (neural_memory_ingress_https_port != 443) else '') + '/mcp') if neural_memory_enable_ingress else ('http://' + neural_memory_public_host + ':' + neural_memory_mcp_port|string + '/mcp') %}
+{% set web_url = ('https://' + neural_memory_public_host + ((':' + neural_memory_ingress_https_port|string) if (neural_memory_ingress_https_port != 443) else '') + '/ui') if neural_memory_enable_ingress else ('http://' + neural_memory_public_host + ':' + neural_memory_web_port|string + '/ui') %}
+{% set docs_url = ('https://' + neural_memory_public_host + ((':' + neural_memory_ingress_https_port|string) if (neural_memory_ingress_https_port != 443) else '') + '/docs') if neural_memory_enable_ingress else ('http://' + neural_memory_public_host + ':' + neural_memory_web_port|string + '/docs') %}
+{% set health_url = ('https://' + neural_memory_public_host + ((':' + neural_memory_ingress_https_port|string) if (neural_memory_ingress_https_port != 443) else '') + '/health') if neural_memory_enable_ingress else ('http://' + neural_memory_public_host + ':' + neural_memory_web_port|string + '/health') %}
+{
+  "notice": "Client configuration snippets for Neural Memory MCP Server",
+  "endpoint_urls": {
+    "http_mcp": "{{ mcp_url }}",
+    "web_ui": "{{ web_url }}",
+    "api_docs": "{{ docs_url }}",
+    "health": "{{ health_url }}"
+  },
+  "claude_code": {
+    "mcpServers": {
+      "neural-memory": {
+        "url": "{{ mcp_url }}",
+        "headers": {
+          "Authorization": "Bearer {{ neural_memory_effective_api_key }}"
+        }
+      }
+    }
+  },
+  "gemini_antigravity": {
+    "mcpServers": {
+      "neural-memory": {
+        "command": "mcp-rtk",
+        "args": [
+          "--preset",
+          "neural-memory",
+          "--",
+          "curl",
+          "-s",
+          "-N",
+          "-k",
+          "-H",
+          "Authorization: Bearer {{ neural_memory_effective_api_key }}",
+          "{{ mcp_url }}"
+        ]
+      }
+    }
+  },
+  "openclaw": {
+    "neural_memory": {
+      "url": "{{ mcp_url }}",
+      "api_key": "{{ neural_memory_effective_api_key }}"
+    }
+  }
+}

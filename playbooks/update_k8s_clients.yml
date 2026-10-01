@@ -1,0 +1,38 @@
+---
+# SPDX-License-Identifier: MIT
+- name: Generate and Distribute Kubernetes MCP Client Configurations
+  hosts: neural_memory_servers
+  become: true
+  tasks:
+    - name: Ensure Kubernetes client config directory exists on target host
+      ansible.builtin.file:
+        path: "{{ neural_memory_k8s_client_config_dir }}"
+        state: directory
+        owner: root
+        group: "{{ neural_memory_group }}"
+        mode: "0750"
+
+    - name: Render Kubernetes client configuration snippet on target host
+      ansible.builtin.template:
+        src: ../roles/neural_memory/templates/mcp-client-config-k8s.json.j2
+        dest: "{{ neural_memory_k8s_client_config_dir }}/mcp_config.json"
+        owner: root
+        group: "{{ neural_memory_group }}"
+        mode: "0640"
+
+    - name: Render Kubernetes client config locally on operator workstation
+      ansible.builtin.template:
+        src: ../roles/neural_memory/templates/mcp-client-config-k8s.json.j2
+        dest: "./mcp_config_k8s.json"
+        mode: "0644"
+      delegate_to: localhost
+      become: false
+
+    - name: Display Kubernetes connection info
+      ansible.builtin.debug:
+        msg:
+          - "=== Kubernetes MCP Client Configuration Generated ==="
+          - "Kubernetes Ingress MCP Endpoint: {{ neural_memory_k8s_mcp_url }}"
+          - "Host Configuration File:       {{ neural_memory_k8s_client_config_dir }}/mcp_config.json"
+          - "Local Workstation File:        ./mcp_config_k8s.json"
+          - "Paste the client snippet into Cursor, Claude Code, or Antigravity to complete cutover"

@@ -1,0 +1,56 @@
+{% set k8s_mcp_url = neural_memory_k8s_mcp_url %}
+{% set k8s_web_url = 'https://' + neural_memory_k8s_host + '/ui' %}
+{% set k8s_api_url = 'https://' + neural_memory_k8s_host + '/api/v1/brain' %}
+{% set effective_key = neural_memory_k8s_api_key if (neural_memory_k8s_api_key | length > 0) else neural_memory_effective_api_key %}
+{
+  "notice": "Client configuration snippets for Neural Memory on Kubernetes (Traefik Ingress)",
+  "endpoint_urls": {
+    "mcp_stream": "{{ k8s_mcp_url }}",
+    "dashboard": "{{ k8s_web_url }}",
+    "rest_api": "{{ k8s_api_url }}"
+  },
+  "cursor": {
+    "mcpServers": {
+      "neural-memory": {
+        "url": "{{ k8s_mcp_url }}",
+        "headers": {
+          "X-API-Key": "{{ effective_key }}"
+        }
+      }
+    }
+  },
+  "claude_code": {
+    "mcpServers": {
+      "neural-memory": {
+        "url": "{{ k8s_mcp_url }}",
+        "headers": {
+          "X-API-Key": "{{ effective_key }}"
+        }
+      }
+    }
+  },
+  "gemini_antigravity": {
+    "mcpServers": {
+      "neural-memory": {
+        "command": "mcp-rtk",
+        "args": [
+          "--preset",
+          "neural-memory",
+          "--",
+          "curl",
+          "-s",
+          "-N",
+          "-H",
+          "X-API-Key: {{ effective_key }}",
+          "{{ k8s_mcp_url }}"
+        ]
+      }
+    }
+  },
+  "openclaw": {
+    "neural_memory": {
+      "url": "{{ k8s_mcp_url }}",
+      "api_key": "{{ effective_key }}"
+    }
+  }
+}

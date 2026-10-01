@@ -1,0 +1,6 @@
+---
+- name: Deploy Neural Memory Stack
+  hosts: neural_memory_servers
+  become: true
+  roles:
+    - role: neural_memory

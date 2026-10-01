@@ -1,0 +1,70 @@
+---
+# SPDX-License-Identifier: MIT
+- name: Validate system requirements
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family in ['Debian', 'RedHat']
+      - neural_memory_container_engine in ['podman', 'docker']
+      - neural_memory_install_dir is defined and neural_memory_install_dir | length > 0
+      - neural_memory_data_dir is defined and neural_memory_data_dir | length > 0
+      - neural_memory_config_dir is defined and neural_memory_config_dir | length > 0
+    fail_msg: "Operating system, container engine, or mandatory directory paths are not properly defined."
+
+- name: Generate random secure API key if not provided
+  ansible.builtin.set_fact:
+    neural_memory_effective_api_key: >-
+      {{
+        neural_memory_api_key
+        if (neural_memory_api_key | length > 0)
+        else ('nmk_' + lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=48'))
+      }}
+  no_log: true
+
+- name: Generate random PostgreSQL password if not provided
+  ansible.builtin.set_fact:
+    neural_memory_effective_postgres_password: >-
+      {{
+        neural_memory_postgres_password
+        if (neural_memory_postgres_password | length > 0)
+        else ('pg_' + lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=32'))
+      }}
+  no_log: true
+
+- name: Include prerequisite tasks
+  ansible.builtin.include_tasks: prerequisites.yml
+
+- name: Include Docker management tasks
+  ansible.builtin.include_tasks: docker.yml
+  when:
+    - neural_memory_container_engine == 'docker'
+    - neural_memory_manage_docker | bool
+
+- name: Include directory setup tasks
+  ansible.builtin.include_tasks: directories.yml
+
+- name: Include PostgreSQL helper tasks
+  ansible.builtin.include_tasks: postgres.yml
+  when: not neural_memory_postgres_external | bool
+
+# -------------------------------------------------------------------------
+# Container Engine Execution Path
+# -------------------------------------------------------------------------
+- name: Include Podman Quadlet deployment tasks
+  ansible.builtin.include_tasks: podman.yml
+  when: neural_memory_container_engine == 'podman'
+
+- name: Include Docker Compose deployment tasks
+  ansible.builtin.include_tasks: compose.yml
+  when: neural_memory_container_engine == 'docker'
+
+- name: Include systemd service tasks (Docker Compose)
+  ansible.builtin.include_tasks: systemd.yml
+  when: neural_memory_container_engine == 'docker'
+
+- name: Include automated backup tasks
+  ansible.builtin.include_tasks: backup.yml
+  when: neural_memory_backup_enabled | bool
+
+- name: Include client configuration tasks
+  ansible.builtin.include_tasks: client_configs.yml
+  when: neural_memory_generate_client_configs | bool

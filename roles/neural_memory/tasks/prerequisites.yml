@@ -1,0 +1,57 @@
+---
+# SPDX-License-Identifier: MIT
+- name: Install system prerequisite packages (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - git
+      - gzip
+      - tar
+      - procps
+      - openssl
+      - acl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+- name: Install system prerequisite packages (RedHat/CentOS/Rocky)
+  ansible.builtin.package:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg2
+      - git
+      - gzip
+      - tar
+      - procps-ng
+      - openssl
+      - acl
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Install Podman prerequisite packages (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name:
+      - podman
+      - slirp4netns
+      - uidmap
+      - dbus-user-session
+      - systemd-container
+    state: present
+  when:
+    - ansible_os_family == "Debian"
+    - neural_memory_container_engine == "podman" or neural_memory_manage_podman | bool
+
+- name: Install Podman prerequisite packages (RedHat/CentOS/Rocky)
+  ansible.builtin.package:
+    name:
+      - podman
+      - slirp4netns
+      - shadow-utils
+    state: present
+  when:
+    - ansible_os_family == "RedHat"
+    - neural_memory_container_engine == "podman" or neural_memory_manage_podman | bool

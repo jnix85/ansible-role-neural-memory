@@ -1,0 +1,22 @@
+---
+# SPDX-License-Identifier: MIT
+- name: Install systemd service unit
+  ansible.builtin.template:
+    src: neural-memory.service.j2
+    dest: "/etc/systemd/system/{{ neural_memory_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart neural-memory
+
+- name: Flush handlers to reload systemd and start/restart service
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure neural-memory service is enabled and started
+  ansible.builtin.systemd:
+    name: "{{ neural_memory_service_name }}"
+    enabled: "{{ neural_memory_service_enabled }}"
+    state: "{{ neural_memory_service_state }}"
+  when: not ansible_check_mode

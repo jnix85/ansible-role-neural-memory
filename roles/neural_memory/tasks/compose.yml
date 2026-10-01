@@ -1,0 +1,53 @@
+---
+# SPDX-License-Identifier: MIT
+- name: Clone Neural Memory source repository
+  ansible.builtin.git:
+    repo: "{{ neural_memory_git_repo }}"
+    version: "{{ neural_memory_git_ref }}"
+    dest: "{{ neural_memory_install_dir }}/src"
+    depth: "{{ neural_memory_git_depth }}"
+    force: true
+  when: neural_memory_source_type == 'git'
+  register: neural_memory_git_checkout
+  notify: Restart neural-memory
+
+- name: Deploy Neural Memory environment file
+  ansible.builtin.template:
+    src: neural-memory.env.j2
+    dest: "{{ neural_memory_config_dir }}/neural-memory.env"
+    owner: root
+    group: "{{ neural_memory_group }}"
+    mode: "0600"
+  notify: Restart neural-memory
+
+- name: Deploy Docker Compose specification
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ neural_memory_install_dir }}/docker-compose.yml"
+    owner: root
+    group: "{{ neural_memory_group }}"
+    mode: "0644"
+  notify: Restart neural-memory
+
+- name: Build Neural Memory container image
+  ansible.builtin.command:
+    cmd: docker compose -f "{{ neural_memory_install_dir }}/docker-compose.yml" build
+  args:
+    chdir: "{{ neural_memory_install_dir }}"
+  when:
+    - not ansible_check_mode
+    - neural_memory_source_type == 'git'
+    - neural_memory_git_checkout.changed | default(false) or not neural_memory_docker_check.rc == 0
+  register: neural_memory_build_result
+  changed_when: "'Successfully built' in neural_memory_build_result.stdout or 'naming to docker.io' in neural_memory_build_result.stderr or 'FINISHED' in neural_memory_build_result.stderr"
+
+- name: Pull pre-built images
+  ansible.builtin.command:
+    cmd: docker compose -f "{{ neural_memory_install_dir }}/docker-compose.yml" pull
+  args:
+    chdir: "{{ neural_memory_install_dir }}"
+  when:
+    - not ansible_check_mode
+    - neural_memory_source_type == 'image'
+  register: neural_memory_pull_result
+  changed_when: "'Downloaded newer image' in neural_memory_pull_result.stdout"

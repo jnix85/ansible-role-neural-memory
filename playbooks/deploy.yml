@@ -1,0 +1,17 @@
+---
+# SPDX-License-Identifier: MIT
+- name: Fast Update / Re-deploy Neural Memory Service
+  hosts: neural_memory_servers
+  become: true
+  tasks:
+    - name: Include Podman tasks
+      ansible.builtin.include_tasks: ../roles/neural_memory/tasks/podman.yml
+      when: neural_memory_container_engine | default('podman') == 'podman'
+
+    - name: Include Compose tasks
+      ansible.builtin.include_tasks: ../roles/neural_memory/tasks/compose.yml
+      when: neural_memory_container_engine | default('podman') == 'docker'
+
+    - name: Include systemd restart
+      ansible.builtin.include_tasks: ../roles/neural_memory/tasks/systemd.yml
+      when: neural_memory_container_engine | default('podman') == 'docker'

@@ -1,0 +1,147 @@
+---
+# Docker Compose configuration for Neural Memory
+# Managed by Ansible - do not edit directly
+
+version: "3.8"
+
+networks:
+  neural-memory-net:
+    driver: bridge
+
+{% if not neural_memory_postgres_external %}
+volumes:
+  postgres_data:
+    name: neural_memory_postgres_data
+{% endif %}
+
+services:
+{% if not neural_memory_postgres_external %}
+  postgres:
+    image: {{ neural_memory_postgres_image }}
+    container_name: {{ neural_memory_postgres_container_name }}
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - {{ neural_memory_install_dir }}/scripts/postgres-init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+{% if neural_memory_postgres_published_port %}
+    ports:
+      - "{{ neural_memory_postgres_published_port }}:5432"
+{% endif %}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - neural-memory-net
+{% endif %}
+
+{% if neural_memory_enable_web | bool %}
+  neural-memory:
+    container_name: neural-memory-web
+{% if neural_memory_source_type == 'git' %}
+    build:
+      context: {{ neural_memory_install_dir }}/src
+      dockerfile: Dockerfile
+    image: {{ neural_memory_image }}
+{% else %}
+    image: {{ neural_memory_image }}
+{% endif %}
+{% if not neural_memory_enable_ingress %}
+    ports:
+      - "{{ neural_memory_web_port }}:8000"
+{% endif %}
+    env_file:
+      - {{ neural_memory_config_dir }}/neural-memory.env
+    volumes:
+      - {{ neural_memory_data_dir }}/data:/data
+{% if not neural_memory_postgres_external %}
+    depends_on:
+      postgres:
+        condition: service_healthy
+{% endif %}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - neural-memory-net
+{% endif %}
+
+{% if neural_memory_enable_mcp_http | bool %}
+  neural-memory-mcp:
+    container_name: neural-memory-mcp
+{% if neural_memory_source_type == 'git' %}
+    image: {{ neural_memory_image }}
+    build:
+      context: {{ neural_memory_install_dir }}/src
+      dockerfile: Dockerfile
+{% else %}
+    image: {{ neural_memory_image }}
+{% endif %}
+    command: ["python", "-m", "neural_memory.mcp", "--http", "{{ neural_memory_mcp_port }}", "--host", "0.0.0.0"]
+{% if not neural_memory_enable_ingress %}
+    ports:
+      - "{{ neural_memory_mcp_port }}:{{ neural_memory_mcp_port }}"
+{% endif %}
+    env_file:
+      - {{ neural_memory_config_dir }}/neural-memory.env
+    volumes:
+      - {{ neural_memory_data_dir }}/data:/data
+{% if not neural_memory_postgres_external %}
+    depends_on:
+      postgres:
+        condition: service_healthy
+{% endif %}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:{{ neural_memory_mcp_port }}/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - neural-memory-net
+{% endif %}
+
+{% if neural_memory_enable_ingress | bool %}
+  ingress:
+    image: {{ neural_memory_ingress_image }}
+    container_name: neural-memory-nginx
+    ports:
+      - "{{ neural_memory_ingress_http_port }}:{{ neural_memory_ingress_http_port }}"
+      - "{{ neural_memory_ingress_https_port }}:{{ neural_memory_ingress_https_port }}"
+    volumes:
+      - {{ neural_memory_config_dir }}/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - {{ neural_memory_ingress_ssl_dir }}:/etc/nginx/ssl:ro
+    restart: unless-stopped
+    networks:
+      - neural-memory-net
+{% endif %}
+
+{% if neural_memory_backup_enabled | bool and not neural_memory_postgres_external %}
+  backup:
+    image: {{ neural_memory_backup_image }}
+    container_name: neural-memory-backup
+    environment:
+      POSTGRES_HOST: {{ neural_memory_postgres_host }}
+      POSTGRES_PORT: "{{ neural_memory_postgres_port }}"
+      POSTGRES_DB: {{ neural_memory_postgres_database }}
+      POSTGRES_USER: {{ neural_memory_postgres_user }}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      SCHEDULE: "{{ neural_memory_backup_cron_schedule }}"
+      BACKUP_KEEP_DAYS: "{{ neural_memory_backup_retention_days }}"
+      BACKUP_SUFFIX: ".sql.gz"
+    volumes:
+      - {{ neural_memory_backup_dir }}:/backups
+    restart: unless-stopped
+    networks:
+      - neural-memory-net
+{% endif %}

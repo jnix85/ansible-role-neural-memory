@@ -1,0 +1,13 @@
+---
+# Example secrets file for neural-memory
+# Encrypt with: ansible-vault encrypt inventory/group_vars/neural_memory_servers/vault.yml
+
+vault_neural_memory_api_key: "nmk_change_this_to_a_secure_token"
+vault_neural_memory_postgres_password: "super_secure_postgres_password_change_me"
+vault_neural_memory_llm_gateway_api_key: "sk-bifrost-or-openai-key"
+vault_neural_memory_gemini_api_key: ""
+vault_neural_memory_anthropic_api_key: ""
+
+# Optional custom TLS certificates (leave empty to auto-generate self-signed cert)
+vault_neural_memory_tls_cert: ""
+vault_neural_memory_tls_key: ""
